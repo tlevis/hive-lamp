@@ -10,6 +10,10 @@
 | base-tunnel.STL | 1  |
 | base-cover.STL | 1  |
 
+top-tubes-holder, bottom-tubes-holder, base-main contains holes for M4 screws   
+base-insert contains holes for M3 inserts  
+base-cover contains holes for M3 screws  
+
 ### Lamp Main Body
 ![Assembly Main](/3d_files/pictures/assembly-main.JPG)
 

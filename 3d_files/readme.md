@@ -11,7 +11,7 @@
 | base-cover.STL | 1  |
 
 ### Lamp Main Body
-![Assembly Main](3d_files/pictures/assembly-main.JPG)
+![Assembly Main](/pictures/assembly-main.JPG)
 
 ### Lamp Base
-![Assembly Base](3d_files/pictures/assembly-base.JPG)
+![Assembly Base](/pictures/assembly-base.JPG)

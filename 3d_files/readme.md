@@ -14,8 +14,12 @@ top-tubes-holder, bottom-tubes-holder, base-main contains holes for M4 screws
 base-insert contains holes for M3 inserts  
 base-cover contains holes for M3 screws  
 
-### Lamp Main Body
+### Lamp Main Body  
 ![Assembly Main](/3d_files/pictures/assembly-main.JPG)
 
-### Lamp Base
+### Lamp Base  
+This is the core of the concrete base, the outer ring of the mold is not 3d printed, I userd 18cm diameter stainless steel ring  
 ![Assembly Base](/3d_files/pictures/assembly-base.JPG)
+
+![Ring](/3d_files/pictures/ring.jpg)
+

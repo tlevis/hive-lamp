@@ -60,10 +60,15 @@ Hive::Hive(bool debug) : _jsonDocument(2048), _jsonCurrentProgram(2048)
 
     _apMode = false;
 
+    _batteryVoltage = 0;
+    _batterySampleCounter = 0;
     _i = 0;
 
+#ifndef HIVE_NANO
     _deviceId = "Hive-" + String(getChipId());
-
+#else 
+    _deviceId = "Hive_Nano-" + String(getChipId());
+#endif
     _webSocket = new WebSocketsServer(WEBSOCKET_PORT);
 
 
@@ -144,8 +149,11 @@ void Hive::setup()
 void Hive::run()
 {
     _webSocket->loop();
-    static long initDelay = millis();
 
+    // read battery voltage
+    readBatteryVolts();
+
+    static long initDelay = millis();
     // Allow 5 seconds buffer time until we start running the program
     // In case of bug in a program, the device may restart indefinitely, this will allow us 5 seconds window to push firmware update
 
@@ -186,7 +194,7 @@ void Hive::run()
             _leds[i] = CRGB::Black;
         }
 
-        for (int i = _i; i < TOTAL_LEDS; i = i + 10)
+        for (int i = _i; i < TOTAL_LEDS; i = i + SLICE_LEDS)
         {
             _leds[i] = CRGB(10, 0, 0);
             _leds[min(TOTAL_LEDS - 1, i + 2)] = CRGB(0, 10, 0);
@@ -204,7 +212,7 @@ void Hive::run()
 void Hive::initLeds() 
 {
     FastLED.addLeds<WS2812B, DATA_PIN, GRB>(_leds, TOTAL_LEDS);
-    FastLED.showColor(CRGB::Black);
+    FastLED.showColor(CRGB::Blue);
 }
 
 void Hive::initWifi()
@@ -235,7 +243,7 @@ void Hive::initWifi()
 void Hive::resetSettingsToDefault() {
     debugPrint("\nResetting settings to default...");
     _currentSSID        = _deviceId;
-    _currentPassword    = DEFAULT_PSWD;                
+    _currentPassword    =  DEFAULT_PSWD;                
     saveConfiguration();
 
     WiFi.softAP(_currentSSID.c_str(), _currentPassword.c_str());
@@ -378,6 +386,25 @@ void Hive::updateFirmware(String filename)
         break;
     }
     _updatingFirmware = false;
+}
+
+float Hive::readBatteryVolts() 
+{
+    // Sample every 10 seconds
+    if (millis() - _batterySampleCounter > 1000) 
+    {
+        _batteryVoltage = ((float)analogRead(BATTERY_PIN) / 4095) * BATTERY_HW_SCALE_FACTOR;
+        Serial.println(_batteryVoltage);
+        _batterySampleCounter = millis();
+    }
+
+    return _batteryVoltage;
+}
+
+int Hive::readBatteryPercentage() 
+{
+    int p = floor((_batteryVoltage - MIN_BATTERY_VOLTAGE) * 100 / (MAX_BATTERY_VOLTAGE - MIN_BATTERY_VOLTAGE));
+    return max(0, min(100, p));
 }
 
 void Hive::colorBreathing() 
@@ -549,6 +576,7 @@ void Hive::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t l
             {
                 debugPrint("Connected!");
                 DynamicJsonDocument doc(50);
+                doc["DEVICE_TYPE"] = FIRMWARE_DEVICE_TYPE;
                 doc["FIRMWARE"] = FIRMWARE_VERSION;
                 String sendData;
                 serializeJson (doc, sendData);
@@ -577,11 +605,21 @@ void Hive::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t l
                     deserializeJson(_jsonCurrentProgram, programData);
                     saveConfiguration();
                 }
-               else if (command == "NETWORK") 
+                else if (command == "NETWORK") 
                 {
                     // Copy the program data to another json document
                     updateNetworking(_jsonDocument["Value"].as<String>());
-                }                
+                } 
+                else if (command == "BATTERY") {
+                    DynamicJsonDocument doc(50);
+                    doc["VOLTS"] = _batteryVoltage;
+                    doc["PERCENTAGE"] = readBatteryPercentage();
+                    String sendData;
+                    serializeJson (doc, sendData);
+                    // // send message to client
+                    _webSocket->sendTXT(num, sendData.c_str());
+
+                }
             }
             break;
         case WStype_BIN:

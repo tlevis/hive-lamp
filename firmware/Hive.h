@@ -1,5 +1,8 @@
 #ifndef HIVE_H
 #define HIVE_H
+
+#define HIVE_NANO 
+
 #include "FastLED.h"
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
@@ -10,14 +13,29 @@
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 
-#define FIRMWARE_VERSION "0.0.18"
+#define FIRMWARE_VERSION "0.0.20"
 
 #define SERVICE_UUID  "0000aaaa-ead2-11e7-80c1-9a214cf093ae"
 #define WIFI_UUID     "00005555-ead2-11e7-80c1-9a214cf093ae"
 
+#ifndef HIVE_NANO
+#define FIRMWARE_DEVICE_TYPE "Hive"
 #define TOTAL_LEDS  300
 #define SLICE_LEDS  10
 #define DATA_PIN    33
+#else
+#define FIRMWARE_DEVICE_TYPE "Hive_Nano"
+#define TOTAL_LEDS  49
+#define SLICE_LEDS  7
+#define DATA_PIN    16
+#endif
+
+#define BATTERY_PIN 36
+#define MAX_BATTERY_VOLTAGE 4.2
+#define MIN_BATTERY_VOLTAGE 3.0
+#define BATTERY_HW_SCALE_FACTOR 5.6 //7.075
+
+
 
 //#define DEFAULT_SSID      "HIVE_AP"
 #define DEFAULT_PSWD        "hive1234"
@@ -47,6 +65,9 @@ protected:
 
     void updateFirmware(String filename);
     void updateNetworking(String msg);
+    
+    float readBatteryVolts();
+    int readBatteryPercentage();
 
     void setColor();
     void setColor(CRGB color);
@@ -77,6 +98,8 @@ protected:
     String      _currentPassword;
     char        _deviceName[100];
 
+    float       _batteryVoltage;
+    long        _batterySampleCounter;
     bool        _configIsDirty;
     bool        _allowDebug;
 

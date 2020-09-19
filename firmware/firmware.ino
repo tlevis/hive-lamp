@@ -1,6 +1,6 @@
 #include "Hive.h"
 
-Hive hive;
+Hive hive(true);
 
 void setup()
 {

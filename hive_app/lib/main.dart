@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' ;
 
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:hiveapp/pages/connectToDevice.dart';
 import 'package:hiveapp/pages/home.dart';
 import 'package:hiveapp/pages/loading.dart';
 import 'package:hiveapp/pages/connect.dart';
@@ -38,12 +39,13 @@ class MyApp extends StatelessWidget {
           accentColor: Colors.green,
           fontFamily: 'Hind',
           textTheme: TextTheme(
-            body1: TextStyle(color: Colors.white, fontSize: 16),
+            bodyText2: TextStyle(color: Colors.white, fontSize: 16),
           ),
         ),
         darkTheme: ThemeData.dark(),
         routes: {
-          '/': (context) => Loading(), //FindDevicesScreen(),
+          '/': (context) => Loading(),//FindDevicesScreen(),// Loading(),
+          '/connect': (context) => WifiSetter(),
           '/home': (context) => Home(),
         },
         localizationsDelegates: [

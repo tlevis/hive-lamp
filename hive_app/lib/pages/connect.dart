@@ -80,7 +80,7 @@ class BluetoothOffScreen extends StatelessWidget {
                 'Bluetooth Adapter is ${state != null ? state.toString().substring(15) : 'not available'}.',
                 style: Theme.of(context)
                     .primaryTextTheme
-                    .subhead
+                    .subtitle1
                     .copyWith(color: Colors.white),
               ),
             ],
@@ -92,6 +92,9 @@ class BluetoothOffScreen extends StatelessWidget {
 }
 
 class FindDevicesScreen extends StatelessWidget {
+
+
+
   @override
   Widget build(BuildContext context) {
     return StatefulWrapper(
@@ -100,7 +103,7 @@ class FindDevicesScreen extends StatelessWidget {
           FlutterBlue.instance.scanResults.listen((results) async {
             // do something with scan results
             for (ScanResult r in results) {
-              if (r.device.name.contains("Hive-")) {
+              if (r.device.name.contains("Hive-") || r.device.name.contains("Hive_Nano")) {
                 print('${r.device.name} found! rssi: ${r.device.id}');
                 await  r.device.connect();
                 List<BluetoothService> services = await r.device.discoverServices();
@@ -143,12 +146,13 @@ class FindDevicesScreen extends StatelessWidget {
             child: SingleChildScrollView(
               child: Column(
                 children: <Widget>[
+                  /*
                   StreamBuilder<List<BluetoothDevice>>(
                     stream: Stream.periodic(Duration(seconds: 2))
                         .asyncMap((_) => FlutterBlue.instance.connectedDevices),
                     initialData: [],
                     builder: (c, snapshot) => Column(
-                      children: snapshot.data.where((d) => d.name.contains("Hive-"))
+                      children: snapshot.data.where((d) => (d.name.contains("Hive-") || d.name.contains("Hive_Nano")))
                           .map((d) => ListTile(
                         title: Text(d.name),
                         //subtitle: Text(d.id.toString()),
@@ -172,12 +176,12 @@ class FindDevicesScreen extends StatelessWidget {
                       ))
                           .toList(),
                     ),
-                  ),
+                  ),*/
                   StreamBuilder<List<ScanResult>>(
                     stream: FlutterBlue.instance.scanResults,
                     initialData: [],
                     builder: (c, snapshot) => Column(
-                      children: snapshot.data.where((r) => r.device.name.contains("Hive-"))
+                      children: snapshot.data.where((r) => (r.device.name.contains("Hive-") || r.device.name.contains("Hive_Nano")))
                           .map(
                             (r) => ScanResultTile(
                           result: r,
@@ -292,7 +296,6 @@ class DeviceScreen extends StatelessWidget {
                 case BluetoothDeviceState.disconnected:
                   onPressed = () => {
                     device.connect(),
-                    print("aaadsjfhadjksfhaks"),
                     device.discoverServices()
                   };
                   text = 'CONNECT';
@@ -353,6 +356,7 @@ class DeviceScreen extends StatelessWidget {
                 ),
               ),
             ),
+            /*
             StreamBuilder<int>(
               stream: device.mtu,
               initialData: 0,
@@ -364,13 +368,32 @@ class DeviceScreen extends StatelessWidget {
                   onPressed: () => device.requestMtu(223),
                 ),
               ),
-            ),
+            ),*/
             StreamBuilder<List<BluetoothService>>(
               stream: device.services,
               initialData: [],
-              builder: (c, snapshot) {
+              builder: (c, snapshot)  {
+                String aa;
+                List<BluetoothService> services = snapshot.data;
+                print("###");
+                Future<List<int>> result = services[0].characteristics[0].read();
+                print(result);
+                print("###");
+                /*
+                services.map(
+                (s) => {
+                  s.characteristics.map((c) async => {
+                    await c.read(),
+                    print("@@@@"),
+                    print(c),
+                    print("@@@@"),
+                  })
+                });*/
                 return Column(
-                  children: _buildServiceTiles(snapshot.data),
+                  children: <Widget>[
+                    Text(result.toString())
+                  ],
+                //_buildServiceTiles(snapshot.data),
                 );
               },
             ),

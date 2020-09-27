@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_blue/flutter_blue.dart';
+
 import 'package:hiveapp/services/wsHelper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -72,12 +75,18 @@ class _ExpandedSectionState extends State<ExpandedSection> with SingleTickerProv
 
 
 class Home extends StatefulWidget {
+  final BluetoothDevice device;
+  Home({Key key, @required this.device}) : super(key: key);
+
   @override
   _HomeState createState() => _HomeState();
 }
 
 class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
+
   TabController _tabController;
+
+  //const _HomeState({Key key, this.device}) : super(key: key);
 
   bool _lampIsConnected = false;
   String _lampFirmware = "";
@@ -87,7 +96,91 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
   Timer _lampFadeTime;
   String _selectedProgram = 'Solid';
 
+  var _program = {
+    "Solid": {
+      "Name": "Solid",
+      "Color": "FF0000",
+      "Executed": false
+    },
+    "Cylon": {
+      "Name": "Cylon",
+      "Color": "F00FF0",
+      "Delay": 60,
+      "Duration": 0,
+      "Position": 0,
+      "Direction": 1,
+      "Brightness": 0,
+      "MaxBrightness": 127
+    },
+    "Breathing": {
+      "Name": "Breathing",
+      "Color": "00420e",
+      "Delay": 10,
+      "Duration": 0,
+      "Direction": 1,
+      "Brightness": 0,
+      "MaxBrightness": 250
+    },
+    "Rainbow": {
+      "Name": "Rainbow",
+      "Delay": 2,
+      "Duration": 0,
+      "Position": 255,
+      "Brightness": 0,
+      "MaxBrightness": 127
+    }
+  };
+
+  final String SERVICE_UUID = "0000aaaa-ead2-11e7-80c1-9a214cf093ae";
+  final String CHARACTERISTIC_UUID = "00005555-ead2-11e7-80c1-9a214cf093ae";
+
+  BluetoothDevice targetDevice;
+  BluetoothCharacteristic targetCharacteristic;
+
   void changeColor(Color color) => setState(() => _programColor1 = color);
+
+  discoverServices() async {
+    if (targetDevice == null) {
+      print("!!! No Device !!!");
+      return;
+    }
+
+    List<BluetoothService> services = await targetDevice.discoverServices();
+    services.forEach((service) {
+      if (service.uuid.toString() == SERVICE_UUID) {
+        service.characteristics.forEach((characteristics) {
+          if (characteristics.uuid.toString() == CHARACTERISTIC_UUID) {
+            targetCharacteristic = characteristics;
+            print("AAA ---");
+            print(targetCharacteristic.descriptors);
+            print("AAA ---");
+/*            setState(() {
+              connectionText = "All Ready with ${targetDevice.name}";
+            });*/
+          }
+        });
+      }
+    });
+  }
+
+  disconnectFromDeivce() {
+    if (targetDevice == null) {
+      return;
+    }
+
+    targetDevice.disconnect();
+
+/*    setState(() {
+      connectionText = "Device Disconnected";
+    });*/
+  }
+
+  writeData(String data) async {
+    if (targetCharacteristic == null) return;
+    List<int> bytes = utf8.encode(data);
+    await targetCharacteristic.write(bytes);
+  }
+
 
   int _selectedIndex = 0;
   void _onItemTapped(int index) {
@@ -112,7 +205,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
   }
 
   void fadeLamp(duration) {
-    _lampFadeTime = Timer.periodic(duration, (Timer t) => {
+    /*_lampFadeTime = Timer.periodic(duration, (Timer t) => {
       if (_lampOpacity > 0.0) {
         setState((){
           _lampOpacity = 0.0;
@@ -124,28 +217,14 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
             _lampOpacity = 1.0;
           })
         }
-    });
+    });*/
   }
 
   initAsync() async {
-    final SharedPreferences sPref = await SharedPreferences.getInstance();
-    if (sPref.getString("lamp-ip").isNotEmpty) {
-      try
-      {
-        sockets.initCommunication(sPref.getString("lamp-ip"), 5656);
-        sockets.addListener(_onMessageReceived);
-        setState(() {
-          _lampIsConnected = true;
-        });
-      }
-      catch (err)
-      {
-        print("Cannot connect to device ws server");
-      }
-
-    }
-
-
+    targetDevice = widget.device;
+    Future.delayed(const Duration(seconds: 1), () {
+      discoverServices();
+    });
   }
 
   @override
@@ -202,11 +281,11 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         items: <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: ImageIcon(AssetImage('assets/images/sliders.png')),
-            title: Text('Control'),
+            label: 'Control',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            title: Text('Settings'),
+            label: 'Settings',
           ),
         ],
         currentIndex: _selectedIndex,
@@ -300,6 +379,11 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                   padding: EdgeInsets.fromLTRB(0, 0, 0, 10),
                                   child: RaisedButton(
                                     onPressed: (){
+                                      String prog = jsonEncode({ "Command": "PROGRAM", "Value": _program[_selectedProgram]});
+                                      print(_selectedProgram);
+                                      print(prog);
+                                      writeData(prog);
+
                                       if (_lampFadeTime != null && _lampFadeTime.isActive) {
                                         _lampFadeTime.cancel();
                                         setState(() {

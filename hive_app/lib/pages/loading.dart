@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:hiveapp/services/transition.dart';
 import 'package:hiveapp/pages/home.dart';
+import 'package:hiveapp/pages/connectToDevice.dart';
+
 import 'package:flutter_blue/flutter_blue.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:io';
@@ -24,7 +26,7 @@ class _LoadingState extends State<Loading> {
     bool checkSomething = true;
     if (checkSomething)
     {
-      Map<String, dynamic> connection;
+/*      Map<String, dynamic> connection;
       try {
         SharedPreferences sPref = await SharedPreferences.getInstance();
         String connectionString = sPref.getString('connectionObject');
@@ -32,8 +34,8 @@ class _LoadingState extends State<Loading> {
       }
       catch(e) {
         print(e);
-      }
-      Navigator.pushReplacementNamed(context, '/home', arguments: connection);
+      }*/
+      Navigator.pushReplacementNamed(context, '/connect');//, arguments: connection);
     }
     else
     {
@@ -43,7 +45,7 @@ class _LoadingState extends State<Loading> {
   }
 
   loadingDone() async {
-    final _secureStorage = new FlutterSecureStorage();
+ /*   final _secureStorage = new FlutterSecureStorage();
     SharedPreferences sPref = await SharedPreferences.getInstance();
 
     bool performBLEScan = true;
@@ -119,9 +121,9 @@ class _LoadingState extends State<Loading> {
 
       // Stop scanning
       flutterBlue.stopScan();
-    }
+    }*/
 
-    var duration = new Duration(seconds: 3);
+    var duration = new Duration(seconds: 1);
     return new Timer(duration, route);
   }
 

@@ -16,6 +16,22 @@
 #include <ESPmDNS.h>
 
 
+uint8_t* string2uint(std::string& value) 
+{
+    const char* msg = value.c_str();
+    size_t length = strlen(msg) + 1;
+
+    uint8_t* uMsg = new uint8_t[length];
+    const char* beg = msg;
+    const char* end = msg + length;
+    size_t i = 0;
+    for (; beg != end; ++beg, ++i)
+    {
+        uMsg[i] = (uint8_t)(*beg);
+    }
+    return uMsg;
+}
+
 class MyServerCallbacks: public BLEServerCallbacks {
 	// TODO this doesn't take into account several clients being connected
 	void onConnect(BLEServer* pServer) {
@@ -32,23 +48,69 @@ class MyServerCallbacks: public BLEServerCallbacks {
 class MyCallbackHandler: public BLECharacteristicCallbacks {
 	
     public:
-        MyCallbackHandler(String ip) : _ip(ip) {}
+        MyCallbackHandler(Hive& oHive) : _hive(oHive) {} //_ip(ip) {}
     
     protected:
-        String _ip;
+        // String _ip;
+        Hive& _hive;
 
         void onWrite(BLECharacteristic *pCharacteristic) {
             std::string value = pCharacteristic->getValue();
-            if (value.length() == 0) {
-                return;
-            }
+            
+            uint8_t* uMsg = string2uint(value);
+            _hive.processMessage(uMsg, 0, true);
         };
 
         void onRead(BLECharacteristic *pCharacteristic) {
-            pCharacteristic->setValue(_ip.c_str());
+          Serial.println("onRead");
+          std::string value = pCharacteristic->getValue();
+          Serial.println(value.c_str());
+            // pCharacteristic->setValue(_ip.c_str());
         }
 };
 
+void Hive::processMessage(uint8_t * payload, uint8_t num, bool isBLE)
+{
+  debugPrint("Text Message received:");
+  debugPrint(payload);
+  deserializeJson(_jsonDocument, payload);
+  String command = _jsonDocument["Command"].as<String>();
+  Serial.println(command.c_str());
+  if (command == "FIRMWARE_UPDATE") {
+      String filename = _jsonDocument["Value"].as<String>();
+      debugPrint("Firmware URL: ", false);
+      debugPrint(filename.c_str());
+      updateFirmware(filename);
+  } 
+  else if (command == "PROGRAM") 
+  {
+      // Copy the program data to another json document
+      String programData;
+      serializeJson(_jsonDocument["Value"], programData);
+      deserializeJson(_jsonCurrentProgram, programData);
+      saveConfiguration();
+  }
+  else if (command == "NETWORK") 
+  {
+      // Copy the program data to another json document
+      updateNetworking(_jsonDocument["Value"].as<String>());
+  } 
+  else if (command == "BATTERY") {
+      DynamicJsonDocument doc(50);
+      doc["VOLTS"] = _batteryVoltage;
+      doc["PERCENTAGE"] = readBatteryPercentage();
+      String sendData;
+      serializeJson (doc, sendData);
+      // send message to client
+      if (isBLE) 
+      {
+        
+      } 
+      else 
+        _webSocket->sendTXT(num, sendData.c_str());
+  
+  }  
+}
 
 
 Hive::Hive(bool debug) : _jsonDocument(2048), _jsonCurrentProgram(2048)
@@ -103,25 +165,46 @@ void Hive::initBLE()
 	// Set server callbacks
 	_pServer->setCallbacks(new MyServerCallbacks());
 
-	// Create BLE Service
+  // -- Main Service -- //
 	_pService = _pServer->createService(BLEUUID(SERVICE_UUID), 20);
 
-	// Create BLE Characteristic for WiFi settings
 	_pCharacteristicWiFi = _pService->createCharacteristic(
 		BLEUUID(WIFI_UUID),
 		// WIFI_UUID,
 		BLECharacteristic::PROPERTY_READ |
 		BLECharacteristic::PROPERTY_WRITE
 	);
-    _pCharacteristicWiFi->addDescriptor(new BLEDescriptor(BLEUUID(WIFI_UUID)));
-	_pCharacteristicWiFi->setCallbacks(new MyCallbackHandler(_localIp));
+  _pCharacteristicWiFi->addDescriptor(new BLEDescriptor(BLEUUID((uint16_t)0x2901)));
+#ifndef HIVE_NANO
+  _pCharacteristicWiFi->getDescriptorByUUID(BLEUUID((uint16_t)0x2901))->setValue("Hive Controller");
+#else 
+  _pCharacteristicWiFi->getDescriptorByUUID(BLEUUID((uint16_t)0x2901))->setValue("Hive Nano Controller");
+#endif
+	_pCharacteristicWiFi->setCallbacks(new MyCallbackHandler(*this));
+  
+  _pService->start();
+  // -- Main Service -- //
 
-	// Start the service
-	_pService->start();
+  // -- Battery Service -- //
+  _pBatteryService = _pServer->createService(BATTERY_SERVICE_UUID);
+  
+  _pBatteryLevelCharacteristic = _pBatteryService->createCharacteristic(
+    BLEUUID((uint16_t)0x2A19), 
+    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+   );
+  _pBatteryLevelCharacteristic->addDescriptor(new BLEDescriptor(BLEUUID((uint16_t)0x2901)));
+  _pBatteryLevelCharacteristic->getDescriptorByUUID(BLEUUID((uint16_t)0x2901))->setValue("Percentage 0 - 100");
+  _pBatteryLevelCharacteristic->addDescriptor(new BLE2902());
+
+  _pBatteryService->start();
+  // -- Battery Service -- //
+
+	
 
 	// Start advertising
 	_pAdvertising = _pServer->getAdvertising();
     _pAdvertising->addServiceUUID(BLEUUID(SERVICE_UUID));
+    _pAdvertising->addServiceUUID(BATTERY_SERVICE_UUID);
     _pAdvertising->setScanResponse(true);
     _pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
     _pAdvertising->setMinPreferred(0x12);    
@@ -396,6 +479,12 @@ float Hive::readBatteryVolts()
         _batteryVoltage = ((float)analogRead(BATTERY_PIN) / 4095) * BATTERY_HW_SCALE_FACTOR;
         Serial.println(_batteryVoltage);
         _batterySampleCounter = millis();
+
+        int percentage = readBatteryPercentage();
+        
+        _pBatteryLevelCharacteristic->setValue(percentage);
+        _pBatteryLevelCharacteristic->notify();
+        
     }
 
     return _batteryVoltage;
@@ -580,46 +669,13 @@ void Hive::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t l
                 doc["FIRMWARE"] = FIRMWARE_VERSION;
                 String sendData;
                 serializeJson (doc, sendData);
-				// // send message to client
-				_webSocket->sendTXT(num, sendData.c_str());
+				        // // send message to client
+				        _webSocket->sendTXT(num, sendData.c_str());
             }
             break;
         case WStype_TEXT:
             {
-                debugPrint("Text Message received:");
-                debugPrint(payload);
-                deserializeJson(_jsonDocument, payload);
-                String command = _jsonDocument["Command"].as<String>();
-
-                if (command == "FIRMWARE_UPDATE") {
-                    String filename = _jsonDocument["Value"].as<String>();
-                    debugPrint("Firmware URL: ", false);
-                    debugPrint(filename.c_str());
-                    updateFirmware(filename);
-                } 
-                else if (command == "PROGRAM") 
-                {
-                    // Copy the program data to another json document
-                    String programData;
-                    serializeJson(_jsonDocument["Value"], programData);
-                    deserializeJson(_jsonCurrentProgram, programData);
-                    saveConfiguration();
-                }
-                else if (command == "NETWORK") 
-                {
-                    // Copy the program data to another json document
-                    updateNetworking(_jsonDocument["Value"].as<String>());
-                } 
-                else if (command == "BATTERY") {
-                    DynamicJsonDocument doc(50);
-                    doc["VOLTS"] = _batteryVoltage;
-                    doc["PERCENTAGE"] = readBatteryPercentage();
-                    String sendData;
-                    serializeJson (doc, sendData);
-                    // // send message to client
-                    _webSocket->sendTXT(num, sendData.c_str());
-
-                }
+                processMessage(payload, num, false);
             }
             break;
         case WStype_BIN:

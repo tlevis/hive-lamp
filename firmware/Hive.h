@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 
 // Includes for BLE
+#include <BLE2902.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
 #include <BLEDevice.h>
@@ -17,6 +18,8 @@
 
 #define SERVICE_UUID  "0000aaaa-ead2-11e7-80c1-9a214cf093ae"
 #define WIFI_UUID     "00005555-ead2-11e7-80c1-9a214cf093ae"
+#define BATTERY_SERVICE_UUID BLEUUID((uint16_t)0x180F)
+
 
 #ifndef HIVE_NANO
 #define FIRMWARE_DEVICE_TYPE "Hive"
@@ -85,7 +88,12 @@ protected:
     void debugPrint(uint8_t* msg, bool withNewline = true);
     void debugPrint(int msg, bool withNewline = true);
 
+
     void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
+    void processMessage(uint8_t * payload, uint8_t num, bool isBLE);
+    //void processMessage(Hive& oHive, uint8_t * payload, uint8_t num, bool isBLE);
+    
+    friend class MyCallbackHandler;
 
     String      _deviceId;
     String      _localIp;
@@ -121,7 +129,12 @@ protected:
     BLECharacteristic*  _pCharacteristicWiFi;
     BLEAdvertising*     _pAdvertising;
     BLEService*         _pService;
-    BLEServer*          _pServer;    
+    BLEServer*          _pServer;
+
+    BLEService*         _pBatteryService;
+    BLECharacteristic*  _pBatteryLevelCharacteristic;
+
+
 
     int _i;
 

@@ -41,3 +41,4 @@ DerivedData/
 # End of https://www.toptal.com/developers/gitignore/api/xcode
 .DS_Store
 hive_app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+.DS_Store

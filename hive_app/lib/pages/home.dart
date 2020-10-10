@@ -130,6 +130,10 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
       "Position": 255,
       "Brightness": 0,
       "MaxBrightness": 127
+    },
+    "Off": {
+      "Name": "Off",
+      "Executed": false
     }
   };
 
@@ -385,6 +389,8 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
       _program["Breathing"]["Delay"] = _breathingSpeed;
     } else if (_selectedProgram == "Cylon") {
       _program["Cylon"]["Delay"] = _cylonSpeed;
+    } else if (_selectedProgram == "Solid") {
+      _program["Solid"]["Executed"] = false;
     }
   }
 
@@ -477,7 +483,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                           ),
                                           DropdownButton<String>(
                                             value: _selectedProgram,
-                                            items: <String>['Solid', 'Cylon', 'Breathing', 'Rainbow'].map((String value) {
+                                            items: <String>['Solid', 'Cylon', 'Breathing', 'Rainbow', 'Off'].map((String value) {
                                               return DropdownMenuItem<String>(
                                                 value: value,
                                                 child: Text(value),
@@ -486,14 +492,15 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                             onChanged: (p) {
                                               setState(() {
                                                 _selectedProgram = p;
-                                                _programColor1 = Hexcolor("#" +_program[p]["Color"]);
+                                                if (_selectedProgram != "Off")
+                                                  _programColor1 = Hexcolor("#" +_program[p]["Color"]);
                                               });
                                             },
                                           )
                                         ],
                                       ),
                                       Visibility(
-                                        visible:  _selectedProgram != "Rainbow",
+                                        visible:  _selectedProgram != "Rainbow" && _selectedProgram != "Off" ,
                                         child: GestureDetector(
                                           onTap:  () {
                                             showDialog (

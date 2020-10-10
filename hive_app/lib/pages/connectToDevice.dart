@@ -6,12 +6,12 @@ import 'package:flutter_blue/flutter_blue.dart';
 import 'package:hiveapp/connectWidget.dart';
 import 'package:hiveapp/pages/home.dart';
 
-class WifiSetter extends StatefulWidget {
+class ConnectToDevice extends StatefulWidget {
   @override
-  _WifiSetterState createState() => _WifiSetterState();
+  _ConnectToDeviceState createState() => _ConnectToDeviceState();
 }
 
-class _WifiSetterState extends State<WifiSetter> {
+class _ConnectToDeviceState extends State<ConnectToDevice> {
   @override
   void initState() {
     super.initState();

@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
         ),
         darkTheme: ThemeData.dark(),
         routes: {
-          '/': (context) => WifiSetter(), //Loading(),//FindDevicesScreen(),// Loading(),
+          '/': (context) => ConnectToDevice(), //Loading(),//FindDevicesScreen(),// Loading(),
           //'/connect': (context) => WifiSetter(),
           '/home': (context) => Home(),
         },

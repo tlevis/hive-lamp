@@ -32,6 +32,7 @@ dependencies:
   flutter_colorpicker: ^0.3.4
   http: ^0.12.2
   hexcolor: ^1.0.4
+  polygon_clipper: ^1.0.2
 
 
 dev_dependencies:

@@ -33,6 +33,7 @@ class _WifiSetterState extends State<WifiSetter> {
       appBar: AppBar(
         title: Text("Detected Hive Lamps"),
       ),
+
       body: RefreshIndicator(
       onRefresh: () =>
           FlutterBlue.instance.startScan(timeout: Duration(seconds: 2)),

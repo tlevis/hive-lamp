@@ -12,6 +12,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:http/http.dart' as http;
 import 'package:hexcolor/hexcolor.dart';
+import 'package:polygon_clipper/polygon_clipper.dart';
+import 'package:polygon_clipper/polygon_border.dart';
+
 
 
 
@@ -152,6 +155,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
 
   int _breathingSpeed = 2;
   int _rainbowSpeed = 2;
+  int _cylonSpeed = 50;
   int _batteryLevel = 0;
 
   String _firmwareVersion = "";
@@ -367,6 +371,8 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         _rainbowSpeed = _program["Rainbow"]["Delay"];
       } else if (_selectedProgram == "Breathing") {
         _breathingSpeed = _program["Breathing"]["Delay"];
+      } else if (_selectedProgram == "Cylon") {
+        _cylonSpeed = _program["Cylon"]["Delay"];
       }
       _deviceConnected = true;
     });
@@ -377,6 +383,8 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
       _program["Rainbow"]["Delay"] = _rainbowSpeed;
     } else if (_selectedProgram == "Breathing") {
       _program["Breathing"]["Delay"] = _breathingSpeed;
+    } else if (_selectedProgram == "Cylon") {
+      _program["Cylon"]["Delay"] = _cylonSpeed;
     }
   }
 
@@ -390,12 +398,13 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
           backgroundColor: Colors.black,
           appBar: AppBar(
             centerTitle: true,
-            backgroundColor: Colors.grey[800],
+            backgroundColor: Colors.black,
             title: Image.asset('assets/images/logo.png',
                 fit: BoxFit.fitHeight, height: 32),
           ),
 
         bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: Colors.black,
           type: BottomNavigationBarType.fixed,
           iconSize: 40,
           items: <BottomNavigationBarItem>[
@@ -423,7 +432,13 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                     controller: _tabController,
                     children: [
                       new Container(
-                        color: Colors.white24,
+                        decoration: BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage("assets/images/background.png"),
+                            fit: BoxFit.fitHeight,
+                          ),
+                        ),
+                        //color: Colors.white24,
                         child: Row(
                           children: <Widget>[
                             Visibility(
@@ -451,14 +466,14 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                     children: <Widget>[
                                       Row(
                                         children: [
-                                          Text("Select active program for the lamp:")
+                                          Text("Select active program for the lamp:", style: TextStyle(fontSize: 16))
                                         ],
                                       ),
                                       Row(
                                         children: <Widget>[
                                           Padding(
                                             padding: EdgeInsets.fromLTRB(0, 0, 10, 0),
-                                            child: Text("Program:"),
+                                            child: Text("Program:", style: TextStyle(fontSize: 16)),
                                           ),
                                           DropdownButton<String>(
                                             value: _selectedProgram,
@@ -521,7 +536,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                       ),
                                       Visibility(
                                           visible: _selectedProgram == "Rainbow",
-                                          child: Text("Pattern Speed ($_rainbowSpeed):")
+                                          child: Text("Pattern Speed:", style: TextStyle(fontSize: 16))
                                       ),
                                       Visibility(
                                         visible: _selectedProgram == "Rainbow",
@@ -552,7 +567,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                           visible: _selectedProgram == "Breathing",
                                           child: Padding(
                                             padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
-                                            child: Text("Breathing Speed ($_breathingSpeed):"),
+                                            child: Text("Breathing Speed:", style: TextStyle(fontSize: 16)),
                                           )
                                       ),
                                       Visibility(
@@ -580,21 +595,63 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                           ],
                                         ),
                                       ),
+                                      Visibility(
+                                          visible: _selectedProgram == "Cylon",
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
+                                            child: Text("Cylon Speed:", style: TextStyle(fontSize: 16)),
+                                          )
+                                      ),
+                                      Visibility(
+                                        visible: _selectedProgram == "Cylon",
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.start,
+
+                                          children: [
+                                            Flexible(flex: 1, child: Text("Fast")),
+                                            Flexible(
+                                              fit: FlexFit.tight,
+                                              flex: 10,
+                                              child: CupertinoSlider(
+                                                  value: min(100, max(1, _cylonSpeed.toDouble())),
+                                                  min: 1,
+                                                  max: 100,
+                                                  onChanged: (value) {
+                                                    setState(() {
+                                                      _cylonSpeed = value.toInt();
+                                                    });
+                                                  }
+                                              ),
+                                            ),
+                                            Flexible(flex: 1, child: Text("Slow")),
+                                          ],
+                                        ),
+                                      ),
 
                                       Expanded(
                                         child: Container(),
                                       ),
                                       Padding(
                                         padding: EdgeInsets.fromLTRB(0, 0, 0, 10),
-                                        child: RaisedButton(
-                                          onPressed: (){
-                                            applyProgramSettings();
-                                            String prog = convert.jsonEncode({ "Command": "PROGRAM", "Value": _program[_selectedProgram]});
-                                            writeData(_programCharacteristic, prog);
-                                            },
-                                          child: Text(
-                                              'Apply',
-                                              style: TextStyle(fontSize: 20)
+                                        child: ButtonTheme(
+                                          height: 120,
+                                          buttonColor: Colors.green,
+                                          child: RaisedButton(
+                                            shape: PolygonBorder(
+                                              sides: 6,
+                                              borderRadius: 0.0, // Default 0.0 degrees
+                                              rotate: 90.0, // Default 0.0 degrees
+                                              border: BorderSide.none, // Default BorderSide.none
+                                            ),
+                                            onPressed: (){
+                                              applyProgramSettings();
+                                              String prog = convert.jsonEncode({ "Command": "PROGRAM", "Value": _program[_selectedProgram]});
+                                              writeData(_programCharacteristic, prog);
+                                              },
+                                            child: Text(
+                                                'Apply',
+                                                style: TextStyle(fontSize: 20)
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -607,7 +664,13 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                         ),
                       ),
                       new Container(
-                          color: Colors.white24,
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage("assets/images/background.png"),
+                              fit: BoxFit.fitHeight,
+                            ),
+                          ),
+                          //color: Colors.white24,
                           child:
                             Padding(
                               padding: EdgeInsets.fromLTRB(10, 10, 0, 0),

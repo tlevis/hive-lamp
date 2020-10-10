@@ -19,4 +19,10 @@ I will replace the LED string to RGBW so I can set it to clean white like in the
 TODO:  
 - [ ] Change RGB string to RGBW
 - [ ] Create PCB 
-- [ ] Complete mobile app (see mobile_app branch)
+- [x] Complete mobile app (tested on iPhone Xs)
+
+# Mobile Application Screenshots  
+![1](/hive_app/screenshots/1.jpeg)
+![2](/hive_app/screenshots/2.jpeg)
+![3](/hive_app/screenshots/3.jpeg)
+![4](/hive_app/screenshots/4.jpeg)

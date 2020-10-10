@@ -30,6 +30,8 @@ dependencies:
   flutter_secure_storage: ^3.3.1+1
   web_socket_channel: "^1.0.8"
   flutter_colorpicker: ^0.3.4
+  http: ^0.12.2
+  hexcolor: ^1.0.4
 
 
 dev_dependencies:

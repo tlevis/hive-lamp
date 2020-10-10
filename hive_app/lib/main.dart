@@ -4,8 +4,7 @@ import 'package:flutter/services.dart' ;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hiveapp/pages/connectToDevice.dart';
 import 'package:hiveapp/pages/home.dart';
-import 'package:hiveapp/pages/loading.dart';
-import 'package:hiveapp/pages/connect.dart';
+//import 'package:hiveapp/pages/loading.dart';
 
 void main() {
   //final config = await AppConfig.forEnvironment('prod');
@@ -34,6 +33,8 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         initialRoute: '/',
         theme: ThemeData(
+          primaryColor: Colors.red,
+          primaryColorDark: Colors.red,
           brightness: Brightness.dark,
           colorScheme: ColorScheme.dark(),
           accentColor: Colors.green,
@@ -44,8 +45,8 @@ class MyApp extends StatelessWidget {
         ),
         darkTheme: ThemeData.dark(),
         routes: {
-          '/': (context) => Loading(),//FindDevicesScreen(),// Loading(),
-          '/connect': (context) => WifiSetter(),
+          '/': (context) => WifiSetter(), //Loading(),//FindDevicesScreen(),// Loading(),
+          //'/connect': (context) => WifiSetter(),
           '/home': (context) => Home(),
         },
         localizationsDelegates: [

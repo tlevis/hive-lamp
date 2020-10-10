@@ -12,121 +12,17 @@ class WifiSetter extends StatefulWidget {
 }
 
 class _WifiSetterState extends State<WifiSetter> {
-  final String SERVICE_UUID = "0000aaaa-ead2-11e7-80c1-9a214cf093ae";
-  final String CHARACTERISTIC_UUID = "00005555-ead2-11e7-80c1-9a214cf093ae";
-
-  FlutterBlue flutterBlue = FlutterBlue.instance;
-  StreamSubscription<ScanResult> scanSubscription;
-
-  List<BluetoothDevice> detectedDevices;
-
-  BluetoothDevice targetDevice;
-  BluetoothCharacteristic targetCharacteristic;
-
-  String connectionText = "";
-
   @override
   void initState() {
     super.initState();
     FlutterBlue.instance.startScan(timeout: Duration(seconds: 2));
-    //startScan();
-  }
-
-   startScan() {
-    setState(() {
-      connectionText = "Start Scanning";
-    });
-
-
-    flutterBlue.startScan(timeout: Duration(seconds: 4));
-    scanSubscription = flutterBlue.scan().listen((scanResult) {
-      print(scanResult.device.name);
-      if (scanResult.device.name.contains("Hive-") || scanResult.device.name.contains("Hive_Nano")) {
-        detectedDevices.add(scanResult.device);
-/*        stopScan();
-
-        setState(() {
-          connectionText = "Found Target Device";
-        });
-
-        targetDevice = scanResult.device;
-        connectToDevice();*/
-      }
-    }, onDone: () => stopScan());
-  }
-
-  stopScan() {
-    scanSubscription?.cancel();
-    scanSubscription = null;
-  }
-
-  connectToDevice() async {
-    if (targetDevice == null) {
-      return;
-    }
-
-    setState(() {
-      connectionText = "Device Connecting";
-    });
-
-    await targetDevice.connect();
-
-    setState(() {
-      connectionText = "Device Connected";
-    });
-
-    discoverServices();
-  }
-
-  disconnectFromDeivce() {
-    if (targetDevice == null) {
-      return;
-    }
-
-    targetDevice.disconnect();
-
-    setState(() {
-      connectionText = "Device Disconnected";
-    });
-  }
-
-  discoverServices() async {
-    if (targetDevice == null) {
-      return;
-    }
-
-    List<BluetoothService> services = await targetDevice.discoverServices();
-    services.forEach((service) {
-      if (service.uuid.toString() == SERVICE_UUID) {
-        service.characteristics.forEach((characteristics) {
-          if (characteristics.uuid.toString() == CHARACTERISTIC_UUID) {
-            targetCharacteristic = characteristics;
-            setState(() {
-              connectionText = "All Ready with ${targetDevice.name}";
-            });
-          }
-        });
-      }
-    });
-  }
-
-  writeData(String data) async {
-    if (targetCharacteristic == null) return;
-
-    List<int> bytes = utf8.encode(data);
-    await targetCharacteristic.write(bytes);
   }
 
   @override
   void dispose() {
     super.dispose();
-    stopScan();
   }
 
-  submitAction() {
-    var wifiData = '${wifiNameController.text},${wifiPasswordController.text}';
-    writeData(wifiData);
-  }
 
   TextEditingController wifiNameController = TextEditingController();
   TextEditingController wifiPasswordController = TextEditingController();

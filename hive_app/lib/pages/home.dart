@@ -1,13 +1,19 @@
-import 'dart:convert';
+import 'dart:convert' as convert;
+
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_blue/flutter_blue.dart';
+import 'package:flutter/cupertino.dart';
 
-import 'package:hiveapp/services/wsHelper.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:http/http.dart' as http;
+import 'package:hexcolor/hexcolor.dart';
+
+
 
 class ExpandedSection extends StatefulWidget {
 
@@ -86,14 +92,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
 
   TabController _tabController;
 
-  //const _HomeState({Key key, this.device}) : super(key: key);
-
-  bool _lampIsConnected = false;
-  String _lampFirmware = "";
   Color _programColor1 = Colors.limeAccent;
-  Color _programColor2 = Colors.yellow;
-  double  _lampOpacity = 1.0;
-  Timer _lampFadeTime;
   String _selectedProgram = 'Solid';
 
   var _program = {
@@ -105,7 +104,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     "Cylon": {
       "Name": "Cylon",
       "Color": "F00FF0",
-      "Delay": 60,
+      "Delay": 50,
       "Duration": 0,
       "Position": 0,
       "Direction": 1,
@@ -123,7 +122,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     },
     "Rainbow": {
       "Name": "Rainbow",
-      "Delay": 2,
+      "Delay": 20,
       "Duration": 0,
       "Position": 255,
       "Brightness": 0,
@@ -131,54 +130,166 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     }
   };
 
-  final String SERVICE_UUID = "0000aaaa-ead2-11e7-80c1-9a214cf093ae";
-  final String CHARACTERISTIC_UUID = "00005555-ead2-11e7-80c1-9a214cf093ae";
+  // Check firmware for complete UUIDs list
+  final String controllerHiveServiceUUID = "02675cf9-f599-4720-840d-6c0ecc607112";
+  final String controllerHiveNanoServiceUUID = "9df5a533-9cce-4f9f-8469-b9eab92b1992";
+  final String programCharacteristicUUID = "ec65a4a3-761b-432c-af88-2cee26319b47";
+  final String firmwareCharacteristicUUID = "fa8f59be-4546-4f26-ba4d-1b9206ddf222";
+  final String wifiSetterCharacteristicUUID = "96c7f61b-770a-4e49-b7df-41e838b7c63f";
+  final String wifiInfoCharacteristicUUID = "7bbf95cc-3972-4914-9709-055bd28b930e";
 
-  BluetoothDevice targetDevice;
-  BluetoothCharacteristic targetCharacteristic;
+  final String batteryServiceUUID = "0000180f-0000-1000-8000-00805f9b34fb";
+  final String batteryCharacteristicUUID = "00002a19-0000-1000-8000-00805f9b34fb";
 
-  void changeColor(Color color) => setState(() => _programColor1 = color);
+  BluetoothDevice _hiveDevice;
+  BluetoothCharacteristic _programCharacteristic;
+  BluetoothCharacteristic _batteryCharacteristic;
+  BluetoothCharacteristic _firmwareCharacteristic;
+  BluetoothCharacteristic _wifiSetterCharacteristic;
+  BluetoothCharacteristic _wifiInfoCharacteristic;
+
+  StreamSubscription<List<int>> _notifyBatterySubscription;
+
+  int _breathingSpeed = 2;
+  int _rainbowSpeed = 2;
+  int _batteryLevel = 0;
+
+  String _firmwareVersion = "";
+  String _latestVersion = "";
+  String _versionText = "";
+  bool _checkingForFirmware = false;
+
+  bool _isNano = false;
+  bool _initiatedBack = false;
+  bool _deviceConnected = false;
+
+  TextEditingController _wifiSSIDController = TextEditingController();
+  TextEditingController _wifiPasswordController = TextEditingController();
+  String _deviceIp = "";
+
+  void checkForUpdate() async {
+    setState(() {
+      _checkingForFirmware = true;
+    });
+    http.get("https://hive.tovilevis.com/latest.txt").then((response) => {
+      if (response.statusCode == 200) {
+          setState(() {
+            _latestVersion = response.body;
+            _checkingForFirmware = false;
+            _versionText = ((_latestVersion == _firmwareVersion) && (_latestVersion.isNotEmpty)) ? 'Your firmware is up to date' : 'New firmware is available: ' + _latestVersion ;
+          })
+      }
+    }).catchError((e) {
+      setState(() {
+        _checkingForFirmware = false;
+        _versionText = "Error: Cannot get latest version from cloud";
+      });
+    });
+  }
+
+  void saveWiFiInfo() {
+    String wifi = convert.jsonEncode({ "Command": "NETWORK", "Value": { "SSID": _wifiSSIDController.text, "PASSWORD": _wifiPasswordController.text} });
+    writeData(_wifiSetterCharacteristic, wifi);
+
+  }
+
+  @override
+  void setState(fn) {
+    if(mounted) {
+      super.setState(fn);
+    }
+  }
+
+  void changeColor(Color color) {
+    String stringColor = color.toString().split('(0x')[1].split(')')[0].substring(2);
+    if (_selectedProgram != "Rainbow") {
+      _program[_selectedProgram]["Color"] = stringColor;
+    }
+    setState(() => _programColor1 = color);
+  }
 
   discoverServices() async {
-    if (targetDevice == null) {
-      print("!!! No Device !!!");
+    if (_hiveDevice == null) {
       return;
     }
 
-    List<BluetoothService> services = await targetDevice.discoverServices();
+    List<BluetoothService> services = await _hiveDevice.discoverServices();
     services.forEach((service) {
-      if (service.uuid.toString() == SERVICE_UUID) {
+      if (service.uuid.toString() == controllerHiveServiceUUID) {
+        setState(() {
+          _isNano = false;
+        });
         service.characteristics.forEach((characteristics) {
-          if (characteristics.uuid.toString() == CHARACTERISTIC_UUID) {
-            targetCharacteristic = characteristics;
-            print("AAA ---");
-            print(targetCharacteristic.descriptors);
-            print("AAA ---");
-/*            setState(() {
-              connectionText = "All Ready with ${targetDevice.name}";
-            });*/
+          if (characteristics.uuid.toString() == programCharacteristicUUID) {
+            _programCharacteristic = characteristics;
+          }
+        });
+      } else if (service.uuid.toString() == controllerHiveNanoServiceUUID) {
+        setState(() {
+          _isNano = true;
+        });
+        service.characteristics.forEach((characteristics) {
+          if (characteristics.uuid.toString() == programCharacteristicUUID) {
+            _programCharacteristic = characteristics;
+            _programCharacteristic.read().then((value) => setState(() {
+              applyRemoteProgramSettings(value);
+            }));
+          } else if (characteristics.uuid.toString() == firmwareCharacteristicUUID) {
+            _firmwareCharacteristic = characteristics;
+            _firmwareCharacteristic.read().then((value) => setState(() { _firmwareVersion = String.fromCharCodes(value); }));
+          } else if (characteristics.uuid.toString() == wifiSetterCharacteristicUUID) {
+            _wifiSetterCharacteristic = characteristics;
+          } else if (characteristics.uuid.toString() == wifiInfoCharacteristicUUID) {
+            _wifiInfoCharacteristic = characteristics;
+            _wifiInfoCharacteristic.read().then((value) => setState(() {
+              String val = String.fromCharCodes(value);
+              var info = val.split(',');
+              _deviceIp = info[0];
+              _wifiSSIDController.text = info[1];
+              _wifiPasswordController.text = info[2];
+            }));
+          }
+        });
+      } else if (service.uuid.toString() == batteryServiceUUID) {
+        service.characteristics.forEach((characteristics) async {
+          if (characteristics.uuid.toString() == batteryCharacteristicUUID) {
+            _batteryCharacteristic = characteristics;
+            await _batteryCharacteristic.setNotifyValue(true);
+            _notifyBatterySubscription = _batteryCharacteristic.value.listen((value) {
+              if (value.isNotEmpty) {
+                setState(() {
+                  _batteryLevel = value[0];
+                });
+              }
+            });
           }
         });
       }
     });
   }
 
-  disconnectFromDeivce() {
-    if (targetDevice == null) {
+  disconnectFromDeivce() async {
+    if (_hiveDevice == null) {
       return;
     }
 
-    targetDevice.disconnect();
+    setState(() {
+      _initiatedBack = true;
+    });
 
-/*    setState(() {
-      connectionText = "Device Disconnected";
-    });*/
+    _programCharacteristic = null;
+
+    _notifyBatterySubscription?.cancel();
+    _notifyBatterySubscription = null;
+    _batteryCharacteristic = null;
+    _hiveDevice.disconnect();
   }
 
-  writeData(String data) async {
-    if (targetCharacteristic == null) return;
-    List<int> bytes = utf8.encode(data);
-    await targetCharacteristic.write(bytes);
+  writeData(BluetoothCharacteristic btChar, String data) async {
+    if (btChar == null) return;
+    List<int> bytes = convert.utf8.encode(data);
+    print("Sending: $data");
+    await btChar.write(bytes);
   }
 
 
@@ -190,38 +301,34 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     _tabController.animateTo(index);
   }
 
-  void _onMessageReceived(serverMessage){
-    Map message = json.decode(serverMessage);
-    print(" ---------- NEW MESSAGE ---------- ");
-    print(message);
-
-    if (message.containsKey("FIRMWARE")) {
-      setState(() {
-        _lampFirmware = message["FIRMWARE"];
-      });
-      print("Firmware version: ${message["FIRMWARE"]}");
-    }
-    print(" ---------- NEW MESSAGE ---------- ");
-  }
-
-  void fadeLamp(duration) {
-    /*_lampFadeTime = Timer.periodic(duration, (Timer t) => {
-      if (_lampOpacity > 0.0) {
-        setState((){
-          _lampOpacity = 0.0;
-        })
-      }
-      else
-        {
-          setState((){
-            _lampOpacity = 1.0;
-          })
-        }
-    });*/
+  void _showAlert(BuildContext context) {
+    showDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          content: Text("Lamp was disconnected"),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: Text("Ok"),
+              onPressed: () {
+                Navigator.of(context).pop(); // Dismiss the alert
+                Navigator.of(context).pop(); // Go to connection screen
+              },
+            )],
+        )
+    );
   }
 
   initAsync() async {
-    targetDevice = widget.device;
+
+    _initiatedBack = false;
+    _hiveDevice = widget.device;
+    _hiveDevice.state.listen((event) {
+      if (!_initiatedBack && event == BluetoothDeviceState.disconnected) {
+        _showAlert(context);
+        //doBack();
+      }
+    });
     Future.delayed(const Duration(seconds: 1), () {
       discoverServices();
     });
@@ -237,231 +344,400 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _tabController.dispose();
+    _deviceConnected = false;
     super.dispose();
+  }
+
+  Future<bool> doBack() {
+    disconnectFromDeivce();
+    Navigator.of(context).pop(true);
+    return Future<bool>.value(true);
+  }
+
+  void applyRemoteProgramSettings(value) {
+    String prog = String.fromCharCodes(value);
+    setState(() {
+      var jsonProg = convert.jsonDecode(prog);
+      _program[jsonProg["Name"]] = jsonProg;
+      _selectedProgram = jsonProg["Name"];
+      if (jsonProg["Name"] != "Rainbow")
+        _programColor1 = Hexcolor("#" + jsonProg["Color"]);
+
+      if (_selectedProgram == "Rainbow") {
+        _rainbowSpeed = _program["Rainbow"]["Delay"];
+      } else if (_selectedProgram == "Breathing") {
+        _breathingSpeed = _program["Breathing"]["Delay"];
+      }
+      _deviceConnected = true;
+    });
+  }
+
+  void applyProgramSettings() {
+    if (_selectedProgram == "Rainbow") {
+      _program["Rainbow"]["Delay"] = _rainbowSpeed;
+    } else if (_selectedProgram == "Breathing") {
+      _program["Breathing"]["Delay"] = _breathingSpeed;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.grey[800],
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Flexible (
-                child: Row (
-                  children: <Widget>[],
-                ),
-                fit: FlexFit.tight,
-                flex: 1,
-              ),
-              Flexible (
-                //padding: EdgeInsets.fromLTRB(32, 0, 0, 0),
-                flex: 2,
-                fit: FlexFit.tight,
-                child: Image.asset('assets/images/logo.png',
-                  fit: BoxFit.fitHeight, height: 32),
-              ),
-              Flexible (
-                child: Row (
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[],
-                ),
-                fit: FlexFit.tight,
-                flex: 1,
-              ),
-            ],
+    return WillPopScope(
+
+
+      onWillPop: doBack,
+      child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            centerTitle: true,
+            backgroundColor: Colors.grey[800],
+            title: Image.asset('assets/images/logo.png',
+                fit: BoxFit.fitHeight, height: 32),
           ),
+
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          iconSize: 40,
+          items: <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: ImageIcon(AssetImage('assets/images/sliders.png')),
+              label: 'Control',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          selectedItemColor: Colors.green,
+          onTap: _onItemTapped,
         ),
 
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        iconSize: 40,
-        items: <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: ImageIcon(AssetImage('assets/images/sliders.png')),
-            label: 'Control',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.green,
-        onTap: _onItemTapped,
-      ),
-
-        body: SafeArea(
-            child: TabBarView(
-                physics: NeverScrollableScrollPhysics(),
-                controller: _tabController,
-                children: [
-                  new Container(
-                    color: Colors.white24,
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(10, 40, 0, 0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Row(
-                                  children: <Widget>[
+          body: GestureDetector(
+            onTap: () {
+              FocusScope.of(context).requestFocus(new FocusNode());
+            },
+            child: SafeArea(
+                child: TabBarView(
+                    physics: NeverScrollableScrollPhysics(),
+                    controller: _tabController,
+                    children: [
+                      new Container(
+                        color: Colors.white24,
+                        child: Row(
+                          children: <Widget>[
+                            Visibility(
+                              visible: !_deviceConnected,
+                              child: Expanded(
+                                child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                    CircularProgressIndicator(),
                                     Padding(
-                                      padding: EdgeInsets.fromLTRB(0, 0, 10, 0),
-                                      child: Text("Program:"),
-                                    ),
-                                    DropdownButton<String>(
-                                      value: _selectedProgram,
-                                      items: <String>['Solid', 'Cylon', 'Breathing', 'Rainbow'].map((String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Text(value),
-                                        );
-                                      }).toList(),
-                                      onChanged: (p) {
-                                        setState(() {
-                                          _selectedProgram = p;
-                                        });
-                                      },
+                                      padding: const EdgeInsets.all(20.0),
+                                      child: Text("Connecting, please wait...", style: TextStyle(fontSize: 16),),
                                     )
-                                  ],
-                                ),
-                                Visibility(
-                                  visible:  _selectedProgram == "Solid"  || _selectedProgram == "Breathing" ||  _selectedProgram == "Cylon" ,
-                                  child: GestureDetector(
-                                    onTap:  () {
-                                      showDialog (
-                                        context: context,
-                                        builder: (BuildContext context) {
-                                        return AlertDialog(
-                                          titlePadding: const EdgeInsets.all(0.0),
-                                          contentPadding: const EdgeInsets.all(0.0),
-                                          content: SingleChildScrollView(
-                                            child: ColorPicker(
+                                  ]),
+                              ),
+                            ),
+                            Visibility(
+                              visible: _deviceConnected,
+                              child: Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(10, 40, 0, 0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: <Widget>[
+                                      Row(
+                                        children: [
+                                          Text("Select active program for the lamp:")
+                                        ],
+                                      ),
+                                      Row(
+                                        children: <Widget>[
+                                          Padding(
+                                            padding: EdgeInsets.fromLTRB(0, 0, 10, 0),
+                                            child: Text("Program:"),
+                                          ),
+                                          DropdownButton<String>(
+                                            value: _selectedProgram,
+                                            items: <String>['Solid', 'Cylon', 'Breathing', 'Rainbow'].map((String value) {
+                                              return DropdownMenuItem<String>(
+                                                value: value,
+                                                child: Text(value),
+                                              );
+                                            }).toList(),
+                                            onChanged: (p) {
+                                              setState(() {
+                                                _selectedProgram = p;
+                                                _programColor1 = Hexcolor("#" +_program[p]["Color"]);
+                                              });
+                                            },
+                                          )
+                                        ],
+                                      ),
+                                      Visibility(
+                                        visible:  _selectedProgram != "Rainbow",
+                                        child: GestureDetector(
+                                          onTap:  () {
+                                            showDialog (
+                                              context: context,
+                                              builder: (BuildContext context) {
+                                              return AlertDialog(
+                                                titlePadding: const EdgeInsets.all(0.0),
+                                                contentPadding: const EdgeInsets.all(0.0),
+                                                content: SingleChildScrollView(
+                                                  child: ColorPicker(
 
-                                              pickerColor: _programColor1,
-                                              onColorChanged: changeColor,
-                                              colorPickerWidth: 300.0,
-                                              pickerAreaHeightPercent: 0.7,
-                                              enableAlpha: true,
-                                              displayThumbColor: true,
-                                              showLabel: true,
-                                              paletteType: PaletteType.hsv,
-                                              pickerAreaBorderRadius: const BorderRadius.only(
-                                                topLeft: const Radius.circular(2.0),
-                                                topRight: const Radius.circular(2.0),
+                                                    pickerColor: _programColor1,
+                                                    onColorChanged: changeColor,
+                                                    colorPickerWidth: 300.0,
+                                                    pickerAreaHeightPercent: 0.7,
+                                                    enableAlpha: false,
+                                                    displayThumbColor: true,
+                                                    showLabel: true,
+                                                    paletteType: PaletteType.hsv,
+                                                    pickerAreaBorderRadius: const BorderRadius.only(
+                                                      topLeft: const Radius.circular(2.0),
+                                                      topRight: const Radius.circular(2.0),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          );},
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              borderRadius: const BorderRadius.all(
+                                                Radius.circular(10.0),
+                                              ),
+                                              color: _programColor1,
+                                            ),
+                                            height: 50,
+                                            width: 50,
+                                          ),
+                                        ),
+                                      ),
+                                      Visibility(
+                                          visible: _selectedProgram == "Rainbow",
+                                          child: Text("Pattern Speed ($_rainbowSpeed):")
+                                      ),
+                                      Visibility(
+                                        visible: _selectedProgram == "Rainbow",
+                                        child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.start,
+
+                                            children: [
+                                              Flexible(flex: 1, child: Text("Fast")),
+                                              Flexible(
+                                                fit: FlexFit.tight,
+                                                flex: 10,
+                                                child: CupertinoSlider(
+                                                    value: min(30, max(1, _rainbowSpeed.toDouble())),
+                                                    min: 1,
+                                                    max: 30,
+                                                    onChanged: (value) {
+                                                      setState(() {
+                                                        _rainbowSpeed = value.toInt();
+                                                      });
+                                                    }
+                                                ),
+                                              ),
+                                              Flexible(flex: 1, child: Text("Slow")),
+                                            ],
+                                        ),
+                                      ),
+                                      Visibility(
+                                          visible: _selectedProgram == "Breathing",
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
+                                            child: Text("Breathing Speed ($_breathingSpeed):"),
+                                          )
+                                      ),
+                                      Visibility(
+                                        visible: _selectedProgram == "Breathing",
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.start,
+
+                                          children: [
+                                            Flexible(flex: 1, child: Text("Fast")),
+                                            Flexible(
+                                              fit: FlexFit.tight,
+                                              flex: 10,
+                                              child: CupertinoSlider(
+                                                  value: min(20, max(1, _breathingSpeed.toDouble())),
+                                                  min: 1,
+                                                  max: 20,
+                                                  onChanged: (value) {
+                                                    setState(() {
+                                                      _breathingSpeed = value.toInt();
+                                                    });
+                                                  }
                                               ),
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    );},
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(10.0),
+                                            Flexible(flex: 1, child: Text("Slow")),
+                                          ],
                                         ),
-                                        color: _programColor1,
                                       ),
-                                      height: 50,
-                                      width: 50,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(),
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.fromLTRB(0, 0, 0, 10),
-                                  child: RaisedButton(
-                                    onPressed: (){
-                                      String prog = jsonEncode({ "Command": "PROGRAM", "Value": _program[_selectedProgram]});
-                                      print(_selectedProgram);
-                                      print(prog);
-                                      writeData(prog);
 
-                                      if (_lampFadeTime != null && _lampFadeTime.isActive) {
-                                        _lampFadeTime.cancel();
-                                        setState(() {
-                                          _lampOpacity = 1.0;
-                                        });
-                                      } else {
-                                        fadeLamp(Duration(seconds: 1));
-                                      }
-
-                                      },
-                                    child: Text(
-                                        'Apply',
-                                        style: TextStyle(fontSize: 20)
-                                    ),
+                                      Expanded(
+                                        child: Container(),
+                                      ),
+                                      Padding(
+                                        padding: EdgeInsets.fromLTRB(0, 0, 0, 10),
+                                        child: RaisedButton(
+                                          onPressed: (){
+                                            applyProgramSettings();
+                                            String prog = convert.jsonEncode({ "Command": "PROGRAM", "Value": _program[_selectedProgram]});
+                                            writeData(_programCharacteristic, prog);
+                                            },
+                                          child: Text(
+                                              'Apply',
+                                              style: TextStyle(fontSize: 20)
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
+                                )
+                              ),
                             ),
-                          )
+                          ],
                         ),
-                        Expanded(
-                          child: Container(
-                            height: 550,
-                            child: Stack(
-                                alignment: Alignment.center,
-                                children: <Widget>[
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(2, 0, 0, 0),
-                                    child: AnimatedOpacity(
-                                      opacity: _lampOpacity,
-                                      duration: Duration(seconds: 1),
-                                      child: Container(
-                                        height: 510,
-                                        width: 40,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.rectangle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: _selectedProgram == "Rainbow" ? Colors.white : _programColor1,
-                                              blurRadius: 40.0,
-                                              spreadRadius: -5.0,
-                                              offset: Offset(0.0, 0)
-                                          )],
-                                          borderRadius: const BorderRadius.all(
-                                            Radius.circular(5.0),
-                                          ),
-                                          color: _selectedProgram == "Solid"  || _selectedProgram == "Breathing" ? _programColor1 : null,
-                                          gradient: _selectedProgram == "Rainbow" ? LinearGradient (
-                                            colors: [
-                                              Colors.red,
-                                              Colors.yellow,
-                                              Colors.green,
-                                              Colors.blue,
-                                            ],
-                                            //stops: [0.1, 0.8, 0.1],
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter
-                                          ) : null
+                      ),
+                      new Container(
+                          color: Colors.white24,
+                          child:
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(10, 10, 0, 0),
+                              child: Column (
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Row(
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text("Battery percentage: $_batteryLevel%", style: TextStyle(fontSize: 16)),
+                                        )
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text("Firmware Version: $_firmwareVersion (Hive${_isNano ? ' Nano' : ''})", style: TextStyle(fontSize: 16)),
+                                        )
+                                      ],
+                                    ),
+                                    Row(
+
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text(_versionText, style: TextStyle(fontSize: 16)),
                                         ),
+                                      ],
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Row(
+                                        children: [
+                                          RaisedButton(
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(10.0),
+                                            ),
+                                            onPressed: (_deviceIp != "" && _deviceIp != "0.0.0.0") ? (_checkingForFirmware ? null : ()=> checkForUpdate()) : null,
+                                            child: Text(
+                                                _checkingForFirmware ? 'Checking...' : 'Check for Update',
+                                                style: TextStyle(fontSize: 20),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                  Image(
-                                    image: AssetImage('assets/images/lamp-transparent.png'),
-                                    //fit: BoxFit,
-                                  ),
-                                ],
-                            ),
+                                    Visibility(
+                                      visible: (_deviceIp == "" || _deviceIp == "0.0.0.0"),
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(8.0, 0.0, 0, 2.0),
+                                        child: Text("Notice: Device must be connected to Wi-Fi network",
+                                          style: TextStyle(color: Colors.orange)),
+                                      ),
+                                    ),
+                                    Divider(),
+                                    Row(
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Text("Connect Lamp To Wi-Fi Network:"),
+                                        )
+                                      ],
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Flexible(
+                                            flex: 2,
+                                            child: TextField(
+                                              obscureText: false,
+                                              decoration: InputDecoration(
+                                                border: OutlineInputBorder(),
+                                                labelText: 'SSID',
+                                              ),
+                                              controller: _wifiSSIDController,
+                                              style: Theme.of(context).textTheme.bodyText2,
+                                            ),
+                                          ),
+                                          Flexible(
+                                            flex: 0,
+                                            child: Text(" ")
+                                          ),
+                                          Flexible(
+                                            flex: 2,
+                                            child: TextField(
+                                              obscureText: true,
+                                              decoration: InputDecoration(
+                                                border: OutlineInputBorder(),
+                                                labelText: 'Password',
+                                              ),
+                                              controller: _wifiPasswordController,
+                                              style: Theme.of(context).textTheme.bodyText2,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Text("Device ip: $_deviceIp", style: TextStyle(fontSize: 16)),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Row(
+                                        children: [
+                                          RaisedButton(
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10.0),
+                                            ),
+                                            onPressed: saveWiFiInfo,
+                                            child: Text("Save",style: TextStyle(fontSize: 20),
+                                            ),
+                                          ),
+
+                                        ],
+                                      ),
+                                    )
+
+                              ]
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  new Container(
-                    color: Colors.red,
-                  ),
-                ]
-            )
-        )
+                            )
+                      ),
+                    ]
+                )
+            ),
+          )
+      ),
     );}
 }

@@ -158,6 +158,10 @@ void Hive::run()
             {
                 rainbow();
             }
+            else if (programName == "Off")
+            {
+                off();
+            }
         }
     }
 
@@ -504,6 +508,16 @@ void Hive::rainbow()
             j = 0;
 
         _jsonCurrentProgram["Duration"] = millis(); 
+    }
+}
+
+void Hive::off()
+{
+    if (!_jsonCurrentProgram["Executed"].as<bool>()) 
+    {
+        _jsonCurrentProgram["Executed"] = true;
+        FastLED.clear();
+        FastLED.show();
     }
 }
 

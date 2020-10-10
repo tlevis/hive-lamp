@@ -14,7 +14,7 @@
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 
-#define FIRMWARE_VERSION "0.0.23"
+#define FIRMWARE_VERSION "0.0.24"
 
 
 
@@ -81,6 +81,7 @@ protected:
     void colorSwirl();
     void rainbow();
     CRGB wheel(byte wheelPos);
+    void off();
 
     CRGB stringToColor(String color);
     

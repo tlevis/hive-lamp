@@ -12,7 +12,7 @@ if (myArgs.length > 0) {
 
 var currentVersion = { 
     "Hive" : "0.0.17",
-    "Hive_Nano" : "0.0.23"
+    "Hive_Nano" : "0.0.24"
 };
 
 

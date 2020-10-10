@@ -12,7 +12,7 @@ if (myArgs.length > 0) {
 
 var currentVersion = { 
     "Hive" : "0.0.17",
-    "Hive_Nano" : "0.0.20"
+    "Hive_Nano" : "0.0.23"
 };
 
 
@@ -63,7 +63,7 @@ var swirl = {
 
 var rainbow = {
     Name: "Rainbow",
-    Delay: 2,
+    Delay: 20,
 	Duration: 0,
 	Position: 255,
 	Brightness: 0,
@@ -154,7 +154,7 @@ wsClient.on('connect', function(connection)
     }, 1000);
 });
 
-const wsURL = `ws://10.0.0.111:5656`;
+const wsURL = `ws://10.0.0.115:5656`;
 
 
 wsClient.connect(wsURL);

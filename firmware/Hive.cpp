@@ -15,103 +15,54 @@
 #include "SPIFFS.h"
 #include <ESPmDNS.h>
 
-
-uint8_t* string2uint(std::string& value) 
-{
-    const char* msg = value.c_str();
-    size_t length = strlen(msg) + 1;
-
-    uint8_t* uMsg = new uint8_t[length];
-    const char* beg = msg;
-    const char* end = msg + length;
-    size_t i = 0;
-    for (; beg != end; ++beg, ++i)
-    {
-        uMsg[i] = (uint8_t)(*beg);
-    }
-    return uMsg;
-}
-
-class MyServerCallbacks: public BLEServerCallbacks {
-	// TODO this doesn't take into account several clients being connected
-	void onConnect(BLEServer* pServer) {
-		Serial.println("BLE client connected");
-		pServer->getAdvertising()->stop();
-	};
-
-	void onDisconnect(BLEServer* pServer) {
-		Serial.println("BLE client disconnected");
-		pServer->getAdvertising()->start();
-	}
-};
-
-class MyCallbackHandler: public BLECharacteristicCallbacks {
-	
-    public:
-        MyCallbackHandler(Hive& oHive) : _hive(oHive) {} //_ip(ip) {}
-    
-    protected:
-        // String _ip;
-        Hive& _hive;
-
-        void onWrite(BLECharacteristic *pCharacteristic) {
-            std::string value = pCharacteristic->getValue();
-            
-            uint8_t* uMsg = string2uint(value);
-            _hive.processMessage(uMsg, 0, true);
-        };
-
-        void onRead(BLECharacteristic *pCharacteristic) {
-          Serial.println("onRead");
-          std::string value = pCharacteristic->getValue();
-          Serial.println(value.c_str());
-            // pCharacteristic->setValue(_ip.c_str());
-        }
-};
-
 void Hive::processMessage(uint8_t * payload, uint8_t num, bool isBLE)
 {
-  debugPrint("Text Message received:");
-  debugPrint(payload);
-  deserializeJson(_jsonDocument, payload);
-  String command = _jsonDocument["Command"].as<String>();
-  Serial.println(command.c_str());
-  if (command == "FIRMWARE_UPDATE") {
-      String filename = _jsonDocument["Value"].as<String>();
-      debugPrint("Firmware URL: ", false);
-      debugPrint(filename.c_str());
-      updateFirmware(filename);
-  } 
-  else if (command == "PROGRAM") 
-  {
-      // Copy the program data to another json document
-      String programData;
-      serializeJson(_jsonDocument["Value"], programData);
-      deserializeJson(_jsonCurrentProgram, programData);
-      saveConfiguration();
-  }
-  else if (command == "NETWORK") 
-  {
-      // Copy the program data to another json document
-      updateNetworking(_jsonDocument["Value"].as<String>());
-  } 
-  else if (command == "BATTERY") {
-      DynamicJsonDocument doc(50);
-      doc["VOLTS"] = _batteryVoltage;
-      doc["PERCENTAGE"] = readBatteryPercentage();
-      String sendData;
-      serializeJson (doc, sendData);
-      // send message to client
-      if (isBLE) 
-      {
-        
-      } 
-      else 
-        _webSocket->sendTXT(num, sendData.c_str());
-  
-  }  
-}
+    debugPrint("Text Message received:");
+    debugPrint(payload);
+    deserializeJson(_jsonDocument, payload);
+    String command = _jsonDocument["Command"].as<String>();
+    
+    if (command == "FIRMWARE_UPDATE")
+    {
+        String filename = _jsonDocument["Value"].as<String>();
+        debugPrint("Firmware URL: ", false);
+        debugPrint(filename.c_str());
+        updateFirmware(filename);
+    }
+    else if (command == "PROGRAM")
+    {
+        // Copy the program data to another json document
+        String programData;
+        serializeJson(_jsonDocument["Value"], programData);
+        deserializeJson(_jsonCurrentProgram, programData);
 
+        if (_jsonCurrentProgram.containsKey("Duration"))
+            _jsonCurrentProgram["Direction"] = 1;
+
+        saveConfiguration();
+
+        _programCharacteristic->setValue(programData.c_str());
+    }
+    else if (command == "NETWORK")
+    {
+        // Copy the program data to another json document
+        updateNetworking(_jsonDocument["Value"].as<String>());
+    }
+    else if (command == "BATTERY")
+    {
+        DynamicJsonDocument doc(50);
+        doc["VOLTS"] = _batteryVoltage;
+        doc["PERCENTAGE"] = readBatteryPercentage();
+        String sendData;
+        serializeJson(doc, sendData);
+        // send message to client
+        if (isBLE)
+        {
+        }
+        else
+            _webSocket->sendTXT(num, sendData.c_str());
+    }
+}
 
 Hive::Hive(bool debug) : _jsonDocument(2048), _jsonCurrentProgram(2048)
 {
@@ -153,64 +104,6 @@ void Hive::initMDNS()
     MDNS.addService("hive", "tcp", WEBSOCKET_PORT);
 }
 
-void Hive::initBLE()
-{
-	// Initialize BLE and set output power
-	BLEDevice::init(_deviceId.c_str());
-	BLEDevice::setPower(ESP_PWR_LVL_P7);
-
-	// Create BLE Server
-	_pServer = BLEDevice::createServer();
-
-	// Set server callbacks
-	_pServer->setCallbacks(new MyServerCallbacks());
-
-  // -- Main Service -- //
-	_pService = _pServer->createService(BLEUUID(SERVICE_UUID), 20);
-
-	_pCharacteristicWiFi = _pService->createCharacteristic(
-		BLEUUID(WIFI_UUID),
-		// WIFI_UUID,
-		BLECharacteristic::PROPERTY_READ |
-		BLECharacteristic::PROPERTY_WRITE
-	);
-  _pCharacteristicWiFi->addDescriptor(new BLEDescriptor(BLEUUID((uint16_t)0x2901)));
-#ifndef HIVE_NANO
-  _pCharacteristicWiFi->getDescriptorByUUID(BLEUUID((uint16_t)0x2901))->setValue("Hive Controller");
-#else 
-  _pCharacteristicWiFi->getDescriptorByUUID(BLEUUID((uint16_t)0x2901))->setValue("Hive Nano Controller");
-#endif
-	_pCharacteristicWiFi->setCallbacks(new MyCallbackHandler(*this));
-  
-  _pService->start();
-  // -- Main Service -- //
-
-  // -- Battery Service -- //
-  _pBatteryService = _pServer->createService(BATTERY_SERVICE_UUID);
-  
-  _pBatteryLevelCharacteristic = _pBatteryService->createCharacteristic(
-    BLEUUID((uint16_t)0x2A19), 
-    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-   );
-  _pBatteryLevelCharacteristic->addDescriptor(new BLEDescriptor(BLEUUID((uint16_t)0x2901)));
-  _pBatteryLevelCharacteristic->getDescriptorByUUID(BLEUUID((uint16_t)0x2901))->setValue("Percentage 0 - 100");
-  _pBatteryLevelCharacteristic->addDescriptor(new BLE2902());
-
-  _pBatteryService->start();
-  // -- Battery Service -- //
-
-	
-
-	// Start advertising
-	_pAdvertising = _pServer->getAdvertising();
-    _pAdvertising->addServiceUUID(BLEUUID(SERVICE_UUID));
-    _pAdvertising->addServiceUUID(BATTERY_SERVICE_UUID);
-    _pAdvertising->setScanResponse(true);
-    _pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-    _pAdvertising->setMinPreferred(0x12);    
-	_pAdvertising->start();
-
-}
 
 
 void Hive::setup()
@@ -219,9 +112,9 @@ void Hive::setup()
     loadConfiguration();
 
     initLeds();
+    initBLE();
     initWifi();
     initMDNS();
-    initBLE();
 
     _webSocket->begin();
     _webSocket->onEvent(std::bind(&Hive::webSocketEvent, this, std::placeholders::_1,std::placeholders:: _2, std::placeholders::_3, std::placeholders::_4));
@@ -251,19 +144,19 @@ void Hive::run()
             }
             else if (programName == "Cylon")
             {
-            colorCylon();
+                colorCylon();
             }
             else if (programName == "Swirl")
             {
-            colorSwirl();
+                colorSwirl();
             }
             else if (programName == "Breathing")
             {
-            colorBreathing();
+                colorBreathing();
             }
             else if (programName == "Rainbow")
             {
-            rainbow();
+                rainbow();
             }
         }
     }
@@ -320,6 +213,8 @@ void Hive::initWifi()
     debugPrint("WiFi connected");  
     debugPrint("IP address: ");
     _localIp = WiFi.localIP().toString();
+    String sendWiFiInfo = _localIp + "," + _currentSSID + "," + _currentPassword;
+    _wifiInfoCharacteristic->setValue(sendWiFiInfo.c_str());
     debugPrint(_localIp);
 }
 
@@ -439,7 +334,10 @@ void Hive::updateNetworking(String msg)
 
     _currentSSID = networkData["SSID"].as<String>();
     _currentPassword = networkData["PASSWORD"].as<String>();
-
+    Serial.print("SSID: ");
+    Serial.print(_currentSSID.c_str());
+    Serial.print("PASSWORD: ");
+    Serial.println(_currentPassword.c_str());
     saveConfiguration();
 
     delay(2000);
@@ -477,13 +375,13 @@ float Hive::readBatteryVolts()
     if (millis() - _batterySampleCounter > 1000) 
     {
         _batteryVoltage = ((float)analogRead(BATTERY_PIN) / 4095) * BATTERY_HW_SCALE_FACTOR;
-        Serial.println(_batteryVoltage);
+        debugPrint(_batteryVoltage);
         _batterySampleCounter = millis();
 
         int percentage = readBatteryPercentage();
         
-        _pBatteryLevelCharacteristic->setValue(percentage);
-        _pBatteryLevelCharacteristic->notify();
+        _batteryLevelCharacteristic->setValue(percentage);
+        _batteryLevelCharacteristic->notify();
         
     }
 
@@ -603,7 +501,7 @@ void Hive::rainbow()
         FastLED.show();
         j++;
         if (j >= 256)
-            j=0;
+            j = 0;
 
         _jsonCurrentProgram["Duration"] = millis(); 
     }

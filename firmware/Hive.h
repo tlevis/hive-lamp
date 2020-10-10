@@ -14,10 +14,12 @@
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
 
-#define FIRMWARE_VERSION "0.0.20"
+#define FIRMWARE_VERSION "0.0.23"
 
-#define SERVICE_UUID  "0000aaaa-ead2-11e7-80c1-9a214cf093ae"
-#define WIFI_UUID     "00005555-ead2-11e7-80c1-9a214cf093ae"
+
+
+
+
 #define BATTERY_SERVICE_UUID BLEUUID((uint16_t)0x180F)
 
 
@@ -28,7 +30,7 @@
 #define DATA_PIN    33
 #else
 #define FIRMWARE_DEVICE_TYPE "Hive_Nano"
-#define TOTAL_LEDS  49
+#define TOTAL_LEDS  53
 #define SLICE_LEDS  7
 #define DATA_PIN    16
 #endif
@@ -40,7 +42,6 @@
 
 
 
-//#define DEFAULT_SSID      "HIVE_AP"
 #define DEFAULT_PSWD        "hive1234"
 #define WEBSOCKET_PORT      5656
 #define RESET_TO_DEFAULT    5 * 1000
@@ -126,13 +127,19 @@ protected:
     WebSocketsServer* _webSocket;
 
     // BLE
-    BLECharacteristic*  _pCharacteristicWiFi;
-    BLEAdvertising*     _pAdvertising;
-    BLEService*         _pService;
-    BLEServer*          _pServer;
+    BLEServer*          _bleServer;
+    BLEAdvertising*     _advertising;
 
-    BLEService*         _pBatteryService;
-    BLECharacteristic*  _pBatteryLevelCharacteristic;
+    BLEService*         _controllerService;
+    BLECharacteristic*  _programCharacteristic;
+    BLECharacteristic*  _firmwareCharacteristic;
+    BLECharacteristic*  _wifiSetterCharacteristic;
+    BLECharacteristic*  _wifiInfoCharacteristic;
+
+    
+    
+    BLEService*         _batteryService;
+    BLECharacteristic*  _batteryLevelCharacteristic;
 
 
 

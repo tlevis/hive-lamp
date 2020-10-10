@@ -22,7 +22,9 @@ TODO:
 - [x] Complete mobile app (tested on iPhone Xs)
 
 # Mobile Application Screenshots  
-![1](/hive_app/screenshots/1.jpeg)
-![2](/hive_app/screenshots/2.jpeg)
-![3](/hive_app/screenshots/3.jpeg)
-![4](/hive_app/screenshots/4.jpeg)
+<div>
+  <img src="/hive_app/screenshots/1.jpeg" width="100" style="maring: 1px">
+  <img src="/hive_app/screenshots/2.jpeg" width="100" style="maring: 1px">
+  <img src="/hive_app/screenshots/3.jpeg" width="100" style="maring: 1px">
+  <img src="/hive_app/screenshots/4.jpeg" width="100" style="maring: 1px">
+</div>

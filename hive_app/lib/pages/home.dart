@@ -230,6 +230,23 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         service.characteristics.forEach((characteristics) {
           if (characteristics.uuid.toString() == programCharacteristicUUID) {
             _programCharacteristic = characteristics;
+            _programCharacteristic.read().then((value) => setState(() {
+              applyRemoteProgramSettings(value);
+            }));
+          } else if (characteristics.uuid.toString() == firmwareCharacteristicUUID) {
+            _firmwareCharacteristic = characteristics;
+            _firmwareCharacteristic.read().then((value) => setState(() { _firmwareVersion = String.fromCharCodes(value); }));
+          } else if (characteristics.uuid.toString() == wifiSetterCharacteristicUUID) {
+            _wifiSetterCharacteristic = characteristics;
+          } else if (characteristics.uuid.toString() == wifiInfoCharacteristicUUID) {
+            _wifiInfoCharacteristic = characteristics;
+            _wifiInfoCharacteristic.read().then((value) => setState(() {
+              String val = String.fromCharCodes(value);
+              var info = val.split(',');
+              _deviceIp = info[0];
+              _wifiSSIDController.text = info[1];
+              _wifiPasswordController.text = info[2];
+            }));
           }
         });
       } else if (service.uuid.toString() == controllerHiveNanoServiceUUID) {

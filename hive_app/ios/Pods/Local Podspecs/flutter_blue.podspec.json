@@ -1,0 +1,54 @@
+{
+  "name": "flutter_blue",
+  "version": "0.0.1",
+  "summary": "Bluetooth Low Energy plugin for Flutter.",
+  "description": "Bluetooth Low Energy plugin for Flutter.",
+  "homepage": "https://github.com/pauldemarco/flutter_blue",
+  "license": {
+    "file": "../LICENSE"
+  },
+  "authors": {
+    "Paul DeMarco": "paulmdemarco@gmail.com"
+  },
+  "source": {
+    "path": "."
+  },
+  "source_files": [
+    "Classes/**/*",
+    "gen/**/*"
+  ],
+  "public_header_files": [
+    "Classes/**/*.h",
+    "gen/**/*.h"
+  ],
+  "dependencies": {
+    "Flutter": [
+
+    ]
+  },
+  "platforms": {
+    "ios": "8.0"
+  },
+  "frameworks": "CoreBluetooth",
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "VALID_ARCHS[sdk=iphonesimulator*]": "x86_64",
+    "GCC_PREPROCESSOR_DEFINITIONS": "$(inherited) GPB_USE_PROTOBUF_FRAMEWORK_IMPORTS=1"
+  },
+  "subspecs": [
+    {
+      "name": "Protos",
+      "source_files": [
+        "gen/*.pbobjc.{h,m}",
+        "gen/**/*.pbobjc.{h,m}"
+      ],
+      "header_mappings_dir": "gen",
+      "requires_arc": false,
+      "dependencies": {
+        "Protobuf": [
+          "~> 3.11.4"
+        ]
+      }
+    }
+  ]
+}

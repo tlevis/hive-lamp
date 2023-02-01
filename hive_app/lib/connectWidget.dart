@@ -92,10 +92,10 @@ class ScanResultTile extends StatelessWidget {
     return ExpansionTile(
       title: _buildTitle(context),
       leading: ImageIcon(AssetImage('assets/images/logo-icon.png'), color: Colors.white),
-      trailing: RaisedButton(
+      trailing: ElevatedButton(
         child: Text('CONNECT'),
-        color: Colors.green,
-        textColor: Colors.white,
+
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, textStyle: TextStyle(color: Colors.white)),
         onPressed: (result.advertisementData.connectable) ? onTap : null,
       ),
       children: <Widget>[

@@ -31,7 +31,7 @@ dependencies:
   web_socket_channel: "^1.0.8"
   flutter_colorpicker: ^0.3.4
   http: ^0.12.2
-  hexcolor: ^1.0.4
+  hexcolor: ^3.0.1
   polygon_clipper: ^1.0.2
 
 

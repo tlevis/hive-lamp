@@ -230,23 +230,6 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         service.characteristics.forEach((characteristics) {
           if (characteristics.uuid.toString() == programCharacteristicUUID) {
             _programCharacteristic = characteristics;
-            _programCharacteristic.read().then((value) => setState(() {
-              applyRemoteProgramSettings(value);
-            }));
-          } else if (characteristics.uuid.toString() == firmwareCharacteristicUUID) {
-            _firmwareCharacteristic = characteristics;
-            _firmwareCharacteristic.read().then((value) => setState(() { _firmwareVersion = String.fromCharCodes(value); }));
-          } else if (characteristics.uuid.toString() == wifiSetterCharacteristicUUID) {
-            _wifiSetterCharacteristic = characteristics;
-          } else if (characteristics.uuid.toString() == wifiInfoCharacteristicUUID) {
-            _wifiInfoCharacteristic = characteristics;
-            _wifiInfoCharacteristic.read().then((value) => setState(() {
-              String val = String.fromCharCodes(value);
-              var info = val.split(',');
-              _deviceIp = info[0];
-              _wifiSSIDController.text = info[1];
-              _wifiPasswordController.text = info[2];
-            }));
           }
         });
       } else if (service.uuid.toString() == controllerHiveNanoServiceUUID) {
@@ -383,17 +366,23 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     String prog = String.fromCharCodes(value);
     setState(() {
       var jsonProg = convert.jsonDecode(prog);
-      _program[jsonProg["Name"]] = jsonProg;
-      _selectedProgram = jsonProg["Name"];
-      if (jsonProg["Name"] != "Rainbow")
-        _programColor1 = Hexcolor("#" + jsonProg["Color"]);
+      //print("---- PROG ---");
+      //print(jsonProg);
+      //print("---- PROG ---");
 
-      if (_selectedProgram == "Rainbow") {
-        _rainbowSpeed = _program["Rainbow"]["Delay"];
-      } else if (_selectedProgram == "Breathing") {
-        _breathingSpeed = _program["Breathing"]["Delay"];
-      } else if (_selectedProgram == "Cylon") {
-        _cylonSpeed = _program["Cylon"]["Delay"];
+      if (jsonProg != null) {
+        _program[jsonProg["Name"]] = jsonProg;
+        _selectedProgram = jsonProg["Name"];
+        if (jsonProg["Name"] != "Rainbow" && jsonProg["Name"] != "Off" )
+          _programColor1 = HexColor("#" + jsonProg["Color"]);
+
+        if (_selectedProgram == "Rainbow") {
+          _rainbowSpeed = _program["Rainbow"]["Delay"];
+        } else if (_selectedProgram == "Breathing") {
+          _breathingSpeed = _program["Breathing"]["Delay"];
+        } else if (_selectedProgram == "Cylon") {
+          _cylonSpeed = _program["Cylon"]["Delay"];
+        }
       }
       _deviceConnected = true;
     });
@@ -510,7 +499,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                               setState(() {
                                                 _selectedProgram = p;
                                                 if (_selectedProgram != "Off")
-                                                  _programColor1 = Hexcolor("#" +_program[p]["Color"]);
+                                                  _programColor1 = HexColor("#" +_program[p]["Color"]);
                                               });
                                             },
                                           )
@@ -660,13 +649,20 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                         child: ButtonTheme(
                                           height: 120,
                                           buttonColor: Colors.green,
-                                          child: RaisedButton(
-                                            shape: PolygonBorder(
-                                              sides: 6,
-                                              borderRadius: 0.0, // Default 0.0 degrees
-                                              rotate: 90.0, // Default 0.0 degrees
-                                              border: BorderSide.none, // Default BorderSide.none
-                                            ),
+                                          child: ElevatedButton(
+
+                                            style: ElevatedButton.styleFrom(shape: StarBorder.polygon(
+
+                                                sides: 6,
+                                                rotation: 90.0, // Default 0.0 degrees
+
+                                            ), minimumSize: const Size(100, 100)),
+                                            // style: ElevatedButton.styleFrom(shape: PolygonBorder(
+                                            //   sides: 6,
+                                            //   borderRadius: 0.0, // Default 0.0 degrees
+                                            //   rotate: 90.0, // Default 0.0 degrees
+                                            //   border: BorderSide.none, // Default BorderSide.none
+                                            // )),
                                             onPressed: (){
                                               applyProgramSettings();
                                               String prog = convert.jsonEncode({ "Command": "PROGRAM", "Value": _program[_selectedProgram]});
@@ -730,10 +726,10 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                       padding: const EdgeInsets.all(8.0),
                                       child: Row(
                                         children: [
-                                          RaisedButton(
-                                            shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10.0),
-                                            ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10.0),
+                                            )),
                                             onPressed: (_deviceIp != "" && _deviceIp != "0.0.0.0") ? (_checkingForFirmware ? null : ()=> checkForUpdate()) : null,
                                             child: Text(
                                                 _checkingForFirmware ? 'Checking...' : 'Check for Update',
@@ -804,10 +800,10 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
                                       padding: const EdgeInsets.all(8.0),
                                       child: Row(
                                         children: [
-                                          RaisedButton(
-                                            shape: RoundedRectangleBorder(
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(
                                               borderRadius: BorderRadius.circular(10.0),
-                                            ),
+                                            )),
                                             onPressed: saveWiFiInfo,
                                             child: Text("Save",style: TextStyle(fontSize: 20),
                                             ),
